@@ -1,0 +1,86 @@
+* ガイガーカウンタ入力値表示＆tweetプログラム
+
+** 2013.9.14, twitter api V1.1対応
+twitter api V1.1に対応するには
+python-twitter 1.0にバージョンアップすればよい。
+パッケージがないので、解凍してtwitter.pyだけを、このディレクトリにコピーすればよい。
+
+
+最終更新日時:2011.4.3
+
+
+** 準備
+python-serial
+	arduinoかsparkfunを使う場合にUSBシリアルポートから入力するので必要
+	mic入力を使う場合は"import serial"をコメントアウトすれば不要
+
+python-pyaudio
+	mic入力を使う場合に必要。
+	arduinoかsparkfunを使う場合は"import pyaudio"をコメントアウトすれば不要
+
+python-oauth2
+python-twitter
+	tweetしないなら不要。次の3行をコメントアウトする。
+	-----------------
+	from twitter_keys import CONSUMER_KEY, CONSUMER_SECRET
+	from twitter_oauth_keys import OAUTH_TOKEN, OAUTH_TOKEN_SECRET
+	import twitter
+	-----------------
+
+	python-twitterに関して、私は"python-twitter-0.8.1"を使った。
+	http://code.google.com/p/python-twitter/downloads/detail?name=python-twitter-0.8.1.tar.gz&can=2&q=
+	ubuntu10.04のパッケージは0.6になる。
+	0.6では動かない。2012年4月現在、0.8.2
+
+
+	tweetさせたい場合、
+
+	https://apps.twitter.com/でapplicationを登録して、twitter_keys.pyに
+	CONSUMER_KEY, CONSUMER_SECRETを書く。
+
+	"twitter_oauth_keys.py"を自分で作る必要がある。
+	"oauth_sample.py"を実行すると、urlが表示されるので、それをbrowserにペーストする。
+	自分のtwitterアカウントにログインして許可するとPINコードが出てくる。
+	そのPINコードを"oauth_sample.py"に聞かれたPINとして入力。
+	"oauth_sample.py"はoauth_tokenとoauth_token_secretを出力。
+
+	"twitter_oauth_keys.py"のファイルを新しく作り、次の2行を書く。
+	-----------------
+	OAUTH_TOKEN = "oauth_sample.pyが出力したoauth_token"
+	OAUTH_TOKEN_SECRET = "oauth_sample.pyが出力したoauth_token_secret"
+	-----------------
+
+
+**実行
+	ikaren_micread.pyを実行する
+	オプションは以下のとおり
+	-----------------
+	-s serial_port|--sport=serial_port: serial_port='arduino'とすると/dev/ttyACM0になる。
+	   				    sparkfunの時は/dev/ttyUSB0とかになる。
+	-t|--tweet: tweetさせる
+	-d|--div2: カウント値を2で割る。私のPCでマイク入力異常のせいで存在。普通は不要
+	-p|--debug: マイク入力値のオプションを調整する時のためのデバッグメッセージを有りにする
+
+	以下は、マイク入力値調整用オプション
+	-u value|--upper=value: upper threshold(default=64)
+	-l value|--lower=value: lower threshold(default=5)
+	-c value|--creset=value: reset cont parameter(default=5)
+	-r value|--ctimes=value: cont times threshold(default=10)
+
+**コマンド	
+	m: 過去60分の分単位データを表示
+	h: 過去24時間の時間単位データを表示
+	d: 過去365日の日単位データを表示
+	mtweet: 時間単位データをtweetする
+	dtweet: 日単位データをtweetする
+	q: 終了する。このコマンドで正常終了すると、それまでの測定データは保存される。
+
+**UDPによるモニタ
+	別のパソコンから数値をモニタしたい時に、コンソールと同じことをudpを使ってできる。
+	ただし'q'コマンドはできない用に制限している。
+	udpのポートは5001、変更したい時はコードを変える。
+	
+	例えばncを使う場合の例、次の様に実行すれば192.168.1.5のマシンで実行している
+	データを見ることができる。
+	nc -u -4 -p 5001 192.168.1.5 5001
+
