@@ -47,7 +47,7 @@ class UdpConsole():
         for rfd in reads:
             if rfd == self.sock:
                 rdata,self.sender=rfd.recvfrom(16)
-                return rdata
+                return rdata.decode('utf-8')
             if rfd == sys.stdin:
                 rdata=sys.stdin.readline()
                 self.sender=None
@@ -59,7 +59,7 @@ class UdpConsole():
             sys.stdout.write(data)
             sys.stdout.flush()
         else:
-            self.sock.sendto(data, self.sender)
+            self.sock.sendto(data.encode('utf-8'), self.sender)
 
 
 class TwitterTweet(Thread):
