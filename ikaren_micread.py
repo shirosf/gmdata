@@ -6,9 +6,8 @@ import getopt
 from datetime import datetime
 from threading import Thread
 import shelve
-#from twitter_keys import CONSUMER_KEY, CONSUMER_SECRET
-#from twitter_oauth_keys import OAUTH_TOKEN, OAUTH_TOKEN_SECRET
-#import twitter
+from TwitterAPI import TwitterAPI
+from twitter_keys import API_KEY, API_KEY_SECRET, ACCSESS_TOKEN, ACCSESS_TOKEN_SECRET
 import serial
 import socket
 import select
@@ -69,7 +68,7 @@ class TwitterTweet(Thread):
         self.encoding=encoding
 
     def create_msg(self, gmdata):
-        self.msg='last24H NewToOld:'
+        self.msg='last24H N2O:'
         for i in range(3):
             self.msg = "%s %4d %4d %4d %4d %4d %4d %4d %4d" % (
                 self.msg,
@@ -83,7 +82,7 @@ class TwitterTweet(Thread):
                 gmdata.hhistory[i*8+7])
 
     def create_dmsg(self, gmdata):
-        self.msg='last16Days NewToOld:'
+        self.msg='last16Days N2O:'
         for i in range(2):
             self.msg = "%s %5d %5d %5d %5d %5d %5d %5d %5d" % (
                 self.msg,
@@ -97,15 +96,9 @@ class TwitterTweet(Thread):
                 gmdata.dhistory[i*8+7])
 
     def run(self):
-        api = twitter.Api(consumer_key=CONSUMER_KEY,
-                          consumer_secret=CONSUMER_SECRET,
-                          access_token_key=OAUTH_TOKEN,
-                          access_token_secret=OAUTH_TOKEN_SECRET,
-                          input_encoding=self.encoding)
-        status = api.PostUpdate(self.msg)
-        udpcon.udpcon_write("%s just posted: %s\n" % (status.user.name, status.text))
-
-
+        api=TwitterAPI(API_KEY, API_KEY_SECRET, ACCSESS_TOKEN, ACCSESS_TOKEN_SECRET)
+        status = api.request('statuses/update', {'status': self.msg})
+        udpcon.udpcon_write("status %s:%s\n" % (status.status_code, self.msg))
 
 
 class GMDataHistory():
