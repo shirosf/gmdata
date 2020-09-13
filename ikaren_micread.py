@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-#import pyaudio
+import pyaudio
 import wave
 import sys
 import getopt
@@ -225,24 +225,24 @@ class GMDataSerRead(GMDataHistory):
         GMDataHistory.close(self)
         self.serial.close()
 
-STX=0x02
-ETX=0x03
-ACK=0x06
+STX=b'\x02'
+ETX=b'\x03'
+ACK=b'\x06'
 class GMDataTCSerRead(GMDataHistory):
     def __init__(self, sport, sbaud=115200, twpost=False):
         GMDataHistory.__init__(self)
         self.twpost=twpost
         self.serial=serial.Serial(port=sport, baudrate=sbaud, timeout=1)
-        self.send_wait_ack('8B0')
-        self.send_wait_ack('802')
+        self.send_wait_ack(b'8B0')
+        self.send_wait_ack(b'802')
 
     def send_data(self, data):
         parity=0
-        self.serial.write(chr(STX))
+        self.serial.write(STX)
         for i in data:
             self.serial.write(i)
-            parity^=ord(i)
-        self.serial.write(chr(ETX))
+            parity^=i
+        self.serial.write(ETX)
         ps="%02X" % parity
         for i in ps:
             self.serial.write(i)
@@ -253,14 +253,14 @@ class GMDataTCSerRead(GMDataHistory):
             x=self.serial.read()
             if len(x)==0: break
             res.append(x)
-        if ord(res[0])!=STX: return NULL
+        if res[0]!=STX: return NULL
         rss=''
         for i in res[1:]:
-            if ord(i)==ETX: break
+            if i==ETX: break
             rss+=i
         parity=0
         for i in rss:
-            parity^=ord(i)
+            parity^=i
         if parity!=int(''.join(res[len(res)-2:]), base=16): return None
         return rss
 
@@ -287,6 +287,58 @@ class GMDataTCSerRead(GMDataHistory):
         GMDataHistory.close(self)
         self.serial.close()
 
+class GMDataRead(GMDataHistory):
+    dpcount=0
+    def __init__(self, chunk = 1024, dformat = pyaudio.paInt16,
+                 channels = 1, rate = 44100,
+                 twpost=False, mcount_div=1):
+        GMDataHistory.__init__(self)
+        self.twpost=twpost
+        self.mcount_div=mcount_div
+        self.chunk = chunk
+        self.pa = pyaudio.PyAudio()
+        self.stream = self.pa.open(format = dformat,
+                                   channels = channels,
+                                   rate = rate,
+                                   input = True,
+                                   frames_per_buffer = self.chunk)
+
+    def proc_onechunk(self):
+        data = self.stream.read(self.chunk)
+        for i in range(0,self.chunk*2,2):
+            v=data[i+1]
+            if v>=0x80: v=(~v)&0x7f
+            if v>thr_upper:
+                if debug_print:
+                    udpcon.udpcon_write(" +%X" % v)
+                if  self.cont==thr_cont_times:
+                    self.mcount+=1
+                    udpcon.udpcon_write("pulse\n")
+                self.cont+=1
+                self.discont=0
+            elif v<thr_lower:
+                if debug_print and self.cont>0:
+                    udpcon.udpcon_write(" -%X" % v)
+                if self.discont>cont_reset:
+                    self.cont=0
+                else:
+                    self.discont+=1
+            else:
+                if debug_print and self.cont>0:
+                    udpcon.udpcon_write(" |%X" % v)
+                self.discont=0
+
+        if debug_print:
+           udpcon.udpcon_write(" %X" % v)
+           self.dpcount+=1
+           if self.dpcount % 16 == 0: udpcon.udpcon_write("\n")
+
+        return 0
+
+    def close(self):
+        GMDataHistory.close(self)
+        self.stream.close()
+        self.pa.terminate()
 
 def usage():
     print("-t|--tweet: Post to Tweeter")
@@ -363,14 +415,17 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    if mmode=='pulse':
-        gmdata=GMDataSerRead(sport=sport, twpost=twpost)
-    elif mmode=='tc':
-        gmdata=GMDataTCSerRead(sport=sport, twpost=twpost)
-        wait_minute=True
+    if sport:
+        if mmode=='pulse':
+            gmdata=GMDataSerRead(sport=sport, twpost=twpost)
+        elif mmode=='tc':
+            gmdata=GMDataTCSerRead(sport=sport, twpost=twpost)
+            wait_minute=True
+        else:
+            usage()
+            sys.exit(2)
     else:
-        usage()
-        sys.exit(2)
+        gmdata=GMDataRead(twpost=twpost, mcount_div=mcount_div)
 
     read_gmdata=ReadGmdata(gmdata, wait_minute)
     read_gmdata.start()
