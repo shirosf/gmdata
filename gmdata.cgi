@@ -1,10 +1,9 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 import getopt
 import datetime, sys, time, os
-import twitter
-from twitter_keys import CONSUMER_KEY, CONSUMER_SECRET
-from twitter_oauth_keys import OAUTH_TOKEN, OAUTH_TOKEN_SECRET
+from TwitterAPI import TwitterAPI
+from twitter_keys import API_KEY, API_KEY_SECRET, ACCSESS_TOKEN, ACCSESS_TOKEN_SECRET
 import pytz
 import sqlite3
 import numpy
@@ -27,22 +26,19 @@ class GetTweet():
             dt=dt.replace(tzinfo=pytz.timezone('UTC'))
             dt=dt.astimezone(pytz.timezone('Asia/Tokyo'))
             return dt
-        
+
     def get_last_htweet(self):
-        tapi=twitter.Api(consumer_key=CONSUMER_KEY,
-                         consumer_secret=CONSUMER_SECRET,
-                         access_token_key=OAUTH_TOKEN,
-                         access_token_secret=OAUTH_TOKEN_SECRET)
-        tls=tapi.GetUserTimeline(self.gmdata_user, count=2)
-        for tl in tls:
-            dt=self.get_dt(tl.created_at)
-            items=tl.text.split()
+        tapi=TwitterAPI(API_KEY, API_KEY_SECRET, ACCSESS_TOKEN, ACCSESS_TOKEN_SECRET)
+        tls=tapi.request('statuses/home_timeline', {'count':'2'})
+        for tl in tls.get_iterator():
+            dt=self.get_dt(tl['created_at'])
+            items=tl['text'].split()
             if items[0]!='last24H': continue
             try:
                 v=int(items[2])
             except:
-                print "error:",sys.exc_info()[0]
-                print tl.text
+                print("error:",sys.exc_info()[0])
+                print(tl.text)
                 v=0
             return dt,v
         return None
@@ -50,40 +46,35 @@ class GetTweet():
     def get_htweet_since(self, since_id=None, count=100):
         if since_id==None:
             since_id=self.tid_Apr1
-        tapi=twitter.Api(consumer_key=CONSUMER_KEY,
-                         consumer_secret=CONSUMER_SECRET,
-                         access_token_key=OAUTH_TOKEN,
-                         access_token_secret=OAUTH_TOKEN_SECRET)
-        tls=tapi.GetUserTimeline(self.gmdata_user, since_id=since_id, count=count)
+        tapi=TwitterAPI(API_KEY, API_KEY_SECRET, ACCSESS_TOKEN, ACCSESS_TOKEN_SECRET)
+        tls=tapi.request('statuses/home_timeline', {'since_id':'%s' % since_id,
+                                                    'count':'%d' % count})
         res=[]
         for tl in tls:
-            dt=self.get_dt(tl.created_at)
-            items=tl.text.split()
+            dt=self.get_dt(tl['created_at'])
+            items=tl['text'].split()
             if items[0]!='last24H': continue
             try:
                 v=int(items[2])
             except:
-                print "error:",sys.exc_info()[0]
-                print tl.text
+                print("error:",sys.exc_info()[0])
+                print(tl.text)
                 v=0
             res.append((dt,v))
         return res
-        
+
     def get_last_dtweet(self):
-        tapi=twitter.Api(consumer_key=CONSUMER_KEY,
-                         consumer_secret=CONSUMER_SECRET,
-                         access_token_key=OAUTH_TOKEN,
-                         access_token_secret=OAUTH_TOKEN_SECRET)
-        tls=tapi.GetUserTimeline(self.gmdata_user, count=24)
+        tapi=TwitterAPI(API_KEY, API_KEY_SECRET, ACCSESS_TOKEN, ACCSESS_TOKEN_SECRET)
+        tls=tapi.request('statuses/home_timeline', {'count':'24'})
         for tl in tls:
-            dt=self.get_dt(tl.created_at)
-            items=tl.text.split()
+            dt=self.get_dt(tl['created_at'])
+            items=tl['text'].split()
             if items[0]!='last16Days': continue
             try:
                 v=int(items[2])
             except:
-                print "error:",sys.exc_info()[0]
-                print tl.text
+                print("error:",sys.exc_info()[0])
+                print(tl.text)
                 v=0
             return dt,v
         return None
@@ -120,7 +111,7 @@ class ManageDb():
             if skip_lt and row[1]<skip_lt: continue
             if skip_gt and row[1]>skip_gt: continue
             res.append((row[0],row[1]))
-        
+
     def put_value(self,dt,v):
         if self.get_value(dt): return -1
         self.cur.execute("INSERT INTO %s VALUES(?, ?)" % (self.tbname), (dt, v))
@@ -145,9 +136,9 @@ def print_html(db, fdt, tdt, skip_lt=None, skip_gt=None, mva=0):
     avg=numpy.average([i[1] for i in tds])
     std=numpy.std([i[1] for i in tds])
     if mva>1: tds=moving_average(tds,mva)
-    print "Content-Type: text/html"
-    print
-    print """
+    print("Content-Type: text/html")
+    print()
+    print ("""
 <html>
   <head>
     <meta http-equiv="Content-type" content="text/html; charset=utf-8" />
@@ -157,8 +148,8 @@ def print_html(db, fdt, tdt, skip_lt=None, skip_gt=None, mva=0):
     <script src="calendar.js" type="text/javascript"></script>
     <script type="text/javascript">
     function init() {
-	calendar.set("startdate");
-	calendar.set("enddate");
+        calendar.set("startdate");
+        calendar.set("enddate");
     }
     </script>
     <script type="text/javascript" src="https://www.google.com/jsapi"></script>
@@ -171,19 +162,19 @@ def print_html(db, fdt, tdt, skip_lt=None, skip_gt=None, mva=0):
         data.addColumn('datetime', 'date');
         data.addColumn('number', 'value');
         data.addRows([
-"""
+""")
     for t,v in tds:
         t=time.localtime(t)
-        print "[new Date(%d,%d,%d,%d,%d,0), %d]," %\
-              (t.tm_year,t.tm_mon-1,t.tm_mday,t.tm_hour,t.tm_min,v)
+        print("[new Date(%d,%d,%d,%d,%d,0), %d]," %\
+              (t.tm_year,t.tm_mon-1,t.tm_mday,t.tm_hour,t.tm_min,v))
 
-    print """
+    print("""
         ]);
 
         var options = {
           title: '八王子放射線 GM管:LND712, 縦軸:CPH',
           legend: {position: 'none'},
-	  hAxis: {format:'M/d H時'},
+          hAxis: {format:'M/d H時'},
         };
 
         var chart = new google.visualization.LineChart(document.getElementById('chart_div'));
@@ -193,21 +184,21 @@ def print_html(db, fdt, tdt, skip_lt=None, skip_gt=None, mva=0):
   </head>
   <body>
     <div id="chart_div" style="width: 900px; height: 500px;"></div>
-"""
-    print "表示範囲平均値=%.01f<br/>" % avg
-    print "表示範囲標準偏差=%.01f<br/>" % std
-    print '<form action="" method="post">'
-    print '<label for="startdate">表示開始日</label>'
-    print '<input type="text" name="startdate" id="startdate" value="%s" />' % startdate
-    print '<label for="enddate">表示終了日</label>'
-    print '<input type="text" name="enddate" id="enddate" value="%s" /><br/>' % enddate
-    print '最大値（これより大きな数値は無視）: '\
-    '<input type="text" name="maxval" value="%s" /><br/>' % maxval
-    print '最小値（これより小さな数値は無視）: '\
-    '<input type="text" name="minval" value="%s" /><br/>' % minval
-    print '<input type="submit" name="redraw" value="再表示" />'
-    print '</form>'
-    print '</body></html>'
+""")
+    print("表示範囲平均値=%.01f<br/>" % avg)
+    print("表示範囲標準偏差=%.01f<br/>" % std)
+    print('<form action="" method="post">')
+    print('<label for="startdate">表示開始日</label>')
+    print('<input type="text" name="startdate" id="startdate" value="%s" />' % startdate)
+    print('<label for="enddate">表示終了日</label>')
+    print('<input type="text" name="enddate" id="enddate" value="%s" /><br/>' % enddate)
+    print('最大値（これより大きな数値は無視）: '\
+    '<input type="text" name="maxval" value="%s" /><br/>' % maxval)
+    print('最小値（これより小さな数値は無視）: '\
+    '<input type="text" name="minval" value="%s" /><br/>' % minval)
+    print('<input type="submit" name="redraw" value="再表示" />')
+    print('</form>')
+    print('</body></html>')
 
 
 def print_data(db, fdt, tdt, skip_lt=None, skip_gt=None, mva=0):
@@ -215,27 +206,27 @@ def print_data(db, fdt, tdt, skip_lt=None, skip_gt=None, mva=0):
     if mva>1: tds=moving_average(tds,mva)
     for t,v in tds:
         t=time.localtime(t)
-        print "%02d月%02d日 %02d時%02d分"%(t.tm_mon,t.tm_mday,t.tm_hour,t.tm_min), v
-    print "平均=%02f" % numpy.average([i[1] for i in tds])
-    print "標準偏差=%02f" % numpy.std([i[1] for i in tds])
+        print("%02d月%02d日 %02d時%02d分"%(t.tm_mon,t.tm_mday,t.tm_hour,t.tm_min), v)
+    print("平均=%02f" % numpy.average([i[1] for i in tds]))
+    print("標準偏差=%02f" % numpy.std([i[1] for i in tds]))
 
 def print_test(gt, db, fdt, tdt):
     tds=gt.get_htweet_since()
     for d in tds:
-        print d[0], d[1]
+        print(d[0], d[1])
 
 def usage(a=None):
-    if a: print a
-    print "-g|--get: fetch the latest data"
-    print "-s id|--since=id: fetch 100 data since id"
-    print "-p|--print: print data"
-    print "-w|--web:print html"
-    print "-f 'Y-M-D_H:M'|--from='Y-M-D_H:M'"
-    print "-t 'Y-M-D_H:M'|--to='Y-M-D_H:M'"
-    print "-l value|--skiplt=value: skip less than this value"
-    print "-g value|--skipgt=value: skip greater than this value"
-    print "-d|--delete: delete values, requires -f and -t options"
-    print "-a num|--mva=num: use moving average with 'num' samples"
+    if a: print(a)
+    print("-g|--get: fetch the latest data")
+    print("-s id|--since=id: fetch 100 data since id")
+    print("-p|--print: print data")
+    print("-w|--web:print html")
+    print("-f 'Y-M-D_H:M'|--from='Y-M-D_H:M'")
+    print("-t 'Y-M-D_H:M'|--to='Y-M-D_H:M'")
+    print("-l value|--skiplt=value: skip less than this value")
+    print("-g value|--skipgt=value: skip greater than this value")
+    print("-d|--delete: delete values, requires -f and -t options")
+    print("-a num|--mva=num: use moving average with 'num' samples")
     return 1
 
 
@@ -268,17 +259,17 @@ def cgi_fields(argv):
     v=form.getvalue("mva",None)
     if v: argv.append("--mva=%s" % v)
     return
-            
+
 if __name__ == "__main__":
     argv=[]
     if len(sys.argv)>1:
         argv=sys.argv
     else:
         cgi_fields(argv)
-        
+
     try:
         opts, args = getopt.getopt(argv[1:], "gpwf:t:s:0l:g:da:",
-	      ["get","print","web","from=","to=","help","test",
+              ["get","print","web","from=","to=","help","test",
                "since=","skiplt=","skipgt=","delete","mva="])
     except getopt.GetoptError:
         usage()
@@ -293,17 +284,17 @@ if __name__ == "__main__":
     skipgt=None
     mva=0
     for o, a in opts:
-    	if o in ("-h", "--help"):
+        if o in ("-h", "--help"):
             usage()
             sys.exit()
-    	if o in ("-f", "--from"):
+        if o in ("-f", "--from"):
             try:
                 fdt=datetime.datetime.strptime(a, '%Y-%m-%d_%H:%M')
                 fdt_exist=True
             except:
                 sys.exit(usage("'%s' must be 'Y-m-d_H:M' format" % a))
 
-    	if o in ("-t", "--to"):
+        if o in ("-t", "--to"):
             try:
                 tdt=datetime.datetime.strptime(a, '%Y-%m-%d_%H:%M')
                 tdt_exist=True
@@ -329,16 +320,16 @@ if __name__ == "__main__":
         if o in ("-a", "--mva"): mva=int(a)
 
     if not runmode: sys.exit(usage())
-    
+
     gt=GetTweet()
     db=ManageDb()
 
     if runmode=="test":
         print_test(gt, db, fdt, tdt)
-        
+
     if runmode=="print":
         print_data(db, fdt, tdt, skiplt, skipgt, mva)
-        
+
     if runmode=="web":
         print_html(db, fdt, tdt, skiplt, skipgt, mva)
 
@@ -346,18 +337,18 @@ if __name__ == "__main__":
         d=gt.get_last_htweet()
         if not d: sys.exit(-1)
         db.put_value(d[0],d[1])
-    
+
     if runmode=="since":
         tds=gt.get_htweet_since(since_id=sid)
         for d in tds:
             db.put_value(d[0],d[1])
-    
+
     if runmode=="delete":
         if not (fdt_exist and tdt_exist):
-            print "to delete need '-f' and '-t' options"
+            print("to delete need '-f' and '-t' options")
             sys.exit(-1)
-            
-        print "delete from '%s' to '%s'" % (fdt,tdt)
+
+        print("delete from '%s' to '%s'" % (fdt,tdt))
         s=raw_input("Are you sure (yes/no) ? ")
         if s=='yes':
             db.delete_values(fdt, tdt)
