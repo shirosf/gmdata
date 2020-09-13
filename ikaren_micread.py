@@ -28,13 +28,15 @@ class UdpConsole():
     wrfd=sys.stdout
     sender=None
 
-    def __init__(self, port=udp_port):
+    def __init__(self, port=udp_port, nostdin=False):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(('',port))
+        self.nostdin=nostdin
 
     def udpcon_read(self, prompt):
-        rlist=[self.sock, sys.stdin]
+        rlist=[self.sock]
+        if not self.nostdin: rlist.append(sys.stdin)
         self.udpcon_write(prompt)
         try:
             reads, dws, des = select.select(rlist,[],[])
@@ -350,6 +352,8 @@ def usage():
     print("-r value|--ctimes=value: cont times threshold(default=%d)" % thr_cont_times)
     print("-s serial_port|--sport=serial_port: set 'arduino' for (/dev/ttyACM0)")
     print("-m machine_mode|--mmode=machine_mode: 'pulse:count pulse|tc TC300S/200S")
+    print("-n|--nostdin: disable console input")
+    print("-j|--udpport port_number: udp port number of the udp cosole")
 
 class ReadGmdata(Thread):
     def __init__(self, gmdata, wait_minute):
@@ -372,9 +376,9 @@ def signal_handler(signal, frame):
 if __name__ == "__main__":
 
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "tdpc:u:l:r:s:m:",
+        opts, args = getopt.getopt(sys.argv[1:], "tdpc:u:l:r:s:m:nj:",
               ["tweet","div2","debug","creset=","upper=","lower=",
-               "ctimes=","sport=","mmode="])
+               "ctimes=","sport=","mmode=","nostdin","udpport="])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -384,6 +388,8 @@ if __name__ == "__main__":
     sport=None
     mmode='pulse'
     wait_minute=False
+    nostdin=False
+    udpport=udp_port
     for o, a in opts:
         if o in ("-h", "--help"):
            usage()
@@ -410,8 +416,12 @@ if __name__ == "__main__":
            print("Use serial port:%s" % sport)
         if o in ("-m", "--mmode"):
            mmode=a
+        if o in ("-n", "--nostdin"):
+           nostdin=True
+        if o in ("-j", "--udpport"):
+           udpport=int(a)
 
-    udpcon=UdpConsole();
+    udpcon=UdpConsole(port=udpport, nostdin=nostdin);
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
